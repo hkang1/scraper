@@ -7,7 +7,9 @@
     <link rel="stylesheet" type="text/css" href="css/popup.css" />
     <script type="text/javascript" src="js/jszip.min.js"></script>
     <script type="text/javascript" src="js/sprintf.min.js"></script>
+    <script type="text/javascript" src="js/download.js"></script>
     <script type="text/javascript" src="js/generate.js"></script>
+    <script type="text/javascript" src="js/storage.js"></script>
     <script type="text/javascript" src="js/popup.js"></script>
   </head>
   <body>
@@ -15,6 +17,14 @@
       <button id="download-zip">Download Zip</button>
       <button id="select-all">Select All</button>
       <button id="deselect-all">Deselect All</button>
+      <span>Image Size:</span>
+      <select id="image-size">
+        <option value="50">tiny</option>
+        <option value="75">small</option>
+        <option value="100">medium</option>
+        <option value="150">large</option>
+        <option value="200">huge</option>
+      </select>
     </nav>
     <div id="gallery">
       <div id="empty">No images found on this page.</div>

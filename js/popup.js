@@ -1,10 +1,17 @@
 const config = {
+  IMAGE_HEIGHT_CUTOFF: 100,
   IMAGE_MAX_HEIGHT: 100
+};
+
+const state = {
+  imageSize: config.IMAGE_HEIGHT_CUTOFF,
+  urls: {}
 };
 
 const data = {
   listeners: [],
-  cells: []
+  cells: [],
+  imageUrls: {}
 };
 
 const addListener = (id, type, handler, binding) => {
@@ -30,10 +37,11 @@ const showEmpty = () => {
 const handleContentImageUrls = urls => {
   const imageUrls = urls || [];
   const gallery = document.getElementById('gallery');
+  const height = document.getElementById('image-size').value;
   let processed = 0;
 
   imageUrls.forEach(url => {
-    if (url == null || url === '') return;
+    if (url == null || url === '' || state.urls[url]) return;
 
     const cell = document.createElement('div');
     const icon = document.createElement('div');
@@ -49,12 +57,12 @@ const handleContentImageUrls = urls => {
     cell.appendChild(icon);
 
     img.onload = () => {
-      img.width = config.IMAGE_MAX_HEIGHT / img.naturalHeight * img.naturalWidth;
-      img.height = config.IMAGE_MAX_HEIGHT;
+      img.width = height/ img.naturalHeight * img.naturalWidth;
+      img.height = height;
       img.onload = null;
 
-      if ((img.naturalWidth < config.IMAGE_MAX_HEIGHT ||
-          img.naturalHeight < config.IMAGE_MAX_HEIGHT) &&
+      if ((img.naturalWidth < config.IMAGE_HEIGHT_CUTOFF ||
+          img.naturalHeight < config.IMAGE_HEIGHT_CUTOFF) &&
           img.parentNode) {
         cell.parentNode.removeChild(cell);
       } else {
@@ -92,39 +100,46 @@ const handleButtonDeselectAll = function () {
 const handleImageToggle = function () {
   const info = this;
   const cell = document.getElementById(info.id);
-  cell.selected = !cell.selected;
-  cell.className = cell.selected ? 'cell selected' : 'cell';
+  info.selected = !info.selected;
+  cell.className = info.selected ? 'cell selected' : 'cell';
 };
 
 const handleButtonDownloadZip = function () {
-  const zip = new JSZip();
-
-  data.cells.filter(cell => cell.selected).forEach((cell, index) => {
-    const regex = /^data:image\/(svg\+xml|jpeg|gif|png);base64,(.*)$/i;
-    const matches = cell.url.match(regex);
-    if (matches.length === 3) {
-      const type = matches[1];
-      const filename = generateFilename(index, type);
-      console.log('filename', filename);
-      const content = b64toBlob(matches[2], `image/${type}`);
-      console.log('content', content);
-      zip.file(filename, content);
+  downloadAsZip(data.cells).then(result => {
+    if (!result) return;
+    for (const cell of data.cells) {
+      state.urls[cell.url] = true;
     }
+    setKey('state', state);
   });
+};
 
-  zip.generateAsync({ type: 'blob' }).then(function (blob) {
-    const filename = 'images.zip';
-    const url = URL.createObjectURL(blob);
-    chrome.downloads.download({ url, filename });
-    // saveAs(blob, filename);
+const handleSelectChangeImageSize = function (e) {
+  state.imageSize = parseInt(e.target.value);
+  setKey('state', state);
+
+  data.cells.forEach(info => {
+    const cell = document.getElementById(info.id);
+    const img = cell.querySelector('img');
+    img.width = state.imageSize / img.naturalHeight * img.naturalWidth;
+    img.height = state.imageSize;
   });
 };
 
 window.addEventListener('DOMContentLoaded', async () => {
+  // Load previous state
+  state = await getKey('state');
+  state.imageSize = state.imageSize || config.IMAGE_HEIGHT_CUTOFF;
+  state.urls = state.urls || {};
+
+  // Set default UI settings
+  document.getElementById('image-size').value = state.imageSize;
+
   // Bind listeners to navigation
   addListener('download-zip', 'click', handleButtonDownloadZip);
   addListener('select-all', 'click', handleButtonSelectAll);
   addListener('deselect-all', 'click', handleButtonDeselectAll);
+  addListener('image-size', 'change', handleSelectChangeImageSize);
 
   // Fetch the list of image urls on the page
   chrome.tabs.query({
