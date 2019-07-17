@@ -1,35 +1,74 @@
-async function setKey (key, value) {
-  return new Promise((resolve, reject) => {
-    const store = {};
-    let data = JSON.stringify(value);
-    let i = 0;
+const STORAGE_KEY_FORMAT = '%s-%05d';
+const STORAGE_KEY_SIZE_LIMIT = chrome.storage.sync.QUOTA_BYTES_PER_ITEM;
 
-    while (data.length > 0) {
-      const keyStr = sprintf('%s-%05', i++);
-      const length = chrome.storage.sync.QUOTA_BYTES_PER_ITEM - keyStr.length - 2;
-      store[keyStr] = data.substring(0, length);;
-      data = data.substring(length);
-    }
-    let resolved = false;
-    chrome.storage.sync.set(store, () => {
-      resolve();
-      resolved = true;
+function encodeKey (key) {
+  return key.replace(/('|"|\\)/, "\$1");
+}
+
+function setStorageKey (store) {
+  return new Promise((resolve, reject) => {
+    chrome.storage.sync.set(store, _ => {
+      const error = chrome.runtime.lastError;
+      if (error) reject(error);
+      else resolve();
     });
-    setTimeout(() => {
-      if (!resolved) reject();
-    }, 500);
   });
 }
 
-async function getKey (key) {
+function getStorageKey (keys) {
   return new Promise((resolve, reject) => {
-    let resolved = false;
-    chrome.storage.sync.get([key], (result) => {
-      resolve(result[key]);
-      resolved = true;
+    chrome.storage.sync.get(keys, (result) => {
+      const error = chrome.runtime.lastError;
+      if (error) reject(error);
+      else if (Array.isArray(keys)) resolve(result);
+      else resolve(result[keys]);
     });
-    setTimeout(() => {
-      if (!resolved) reject();
-    }, 500);
   });
+}
+
+async function setKey (key, value) {
+  if (value == null) return;
+  
+  const state = {
+    data: JSON.stringify(value),
+    store: {},
+    index: 0
+  };
+
+  if (state.data.length > STORAGE_KEY_SIZE_LIMIT) {
+    while (state.data.length > 0) {
+      const storeKey = sprintf(STORAGE_KEY_FORMAT, key, state.index);
+      const storeValueSize = STORAGE_KEY_SIZE_LIMIT - storeKey.length - 2;
+      state.store[storeKey] = state.data.substring(0, storeValueSize);
+      state.data = state.data.substring(storeValueSize);
+      state.index++;
+    }
+  } else {
+    state.store = { [key]: state.data };
+  }
+
+  return await setStorageKey(state.store);
+}
+
+async function getKey (key) {
+  const value = await getStorageKey(key);
+  if (value !== undefined) return /^{.*}$/.test(value) ? JSON.parse(value) : value;
+
+  const state = {
+    value: '',
+    cycle: true,
+    index: 0
+  };
+
+  while (state.cycle) {
+    const storeKey = sprintf(STORAGE_KEY_FORMAT, key, state.index);
+    const storeValue = await getStorageKey(storeKey);
+    if (storeValue === undefined) state.cycle = false;
+    else {
+      state.value += storeValue;
+      state.index++;
+    }
+  }
+
+  return state.index === 0 ? null : JSON.parse(state.value);
 }

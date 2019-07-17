@@ -3,7 +3,7 @@ const config = {
   IMAGE_MAX_HEIGHT: 100
 };
 
-const state = {
+let state = {
   imageSize: config.IMAGE_HEIGHT_CUTOFF,
   urls: {}
 };
@@ -34,14 +34,14 @@ const showEmpty = () => {
   empty.style.display = 'flex';
 };
 
-const handleContentImageUrls = urls => {
+const handleContentImageUrls = function (urls) {
   const imageUrls = urls || [];
   const gallery = document.getElementById('gallery');
   const height = document.getElementById('image-size').value;
   let processed = 0;
 
-  imageUrls.forEach(url => {
-    if (url == null || url === '' || state.urls[url]) return;
+  for (const url of imageUrls) {
+    if (url == null || url === '' || state.urls[url] != null) continue;
 
     const cell = document.createElement('div');
     const icon = document.createElement('div');
@@ -78,7 +78,7 @@ const handleContentImageUrls = urls => {
     img.src = url;
 
     addListener(id, 'click', handleImageToggle, info);
-  });
+  }
 };
 
 const handleButtonSelectAll = function () {
@@ -108,8 +108,9 @@ const handleButtonDownloadZip = function () {
   downloadAsZip(data.cells).then(result => {
     if (!result) return;
     for (const cell of data.cells) {
-      state.urls[cell.url] = true;
+      state.urls[cell.url] = cell.selected;
     }
+    console.log('state urls update', state.urls);
     setKey('state', state);
   });
 };
@@ -128,9 +129,10 @@ const handleSelectChangeImageSize = function (e) {
 
 window.addEventListener('DOMContentLoaded', async () => {
   // Load previous state
-  state = await getKey('state');
+  state = await getKey('state') || {};
   state.imageSize = state.imageSize || config.IMAGE_HEIGHT_CUTOFF;
   state.urls = state.urls || {};
+  console.log('state loaded B', typeof state, state);
 
   // Set default UI settings
   document.getElementById('image-size').value = state.imageSize;
@@ -146,6 +148,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     active: true,
     currentWindow: true
   }, tabs => {
+    console.log('loading image urls');
     const message = { from: 'popup', subject: 'getImageURLs' };
     chrome.tabs.sendMessage(tabs[0].id, message, handleContentImageUrls);
   });
