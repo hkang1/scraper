@@ -1,8 +1,7 @@
-function generateFilename (index, suffix) {
+function generateFilename (index, prefix, suffix) {
   let ext = suffix;
-  if (suffix === 'svg+xml') ext = 'svg';
-  else if (suffix === 'jpeg') ext = 'jpg';
-  return sprintf('image-%03d.%s', index, ext);
+  if (suffix === 'jpeg') ext = 'jpg';
+  return sprintf('%s%03d.%s', prefix, index, ext);
 }
 
 function b64toBlob (b64Data, contentType = '', sliceSize = 512) {
@@ -27,12 +26,13 @@ function b64toBlob (b64Data, contentType = '', sliceSize = 512) {
 
 async function downloadAsZip (info) {
   const zip = new JSZip();
+  const prefix = document.getElementById('prefix').value || 'image-';
   let addCount = 0;
 
   for (const [ index, data ] of info.entries()) {
     const url = data.url;
     const folder = data.selected ? 'positive' : 'negative';
-    const regexBase64 = /^data:image\/(gif|jpe?g|png|svg\+xml);base64,(.*)$/i;
+    const regexBase64 = /^data:image\/(gif|jpe?g|png);base64,(.*)$/i;
     const regexHttp = /^https?/i;
     const matchesBase64 = url.match(regexBase64);
     const matchesHttp = url.match(regexHttp);
@@ -40,7 +40,7 @@ async function downloadAsZip (info) {
     if (matchesBase64 && matchesBase64.length === 3) {
       const type = matchesBase64[1];
       const data = matchesBase64[2];
-      const filename = generateFilename(index, type);
+      const filename = generateFilename(index, prefix, type);
       const content = b64toBlob(data, `image/${type}`);
       zip.folder(folder).file(filename, content);
       addCount++;
@@ -51,7 +51,7 @@ async function downloadAsZip (info) {
 
       if (parts.length !== 2) continue;
 
-      const filename = generateFilename(index, parts[1]);
+      const filename = generateFilename(index, prefix, parts[1]);
       zip.folder(folder).file(filename, content);
       addCount++;
     }

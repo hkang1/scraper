@@ -3,26 +3,22 @@ const config = {
   IMAGE_MAX_HEIGHT: 100
 };
 
-let state = {
-  imageSize: config.IMAGE_HEIGHT_CUTOFF,
-  urls: {}
+const state = {
+  cells: [],
+  imageSize: config.IMAGE_HEIGHT_CUTOFF
 };
 
-const data = {
-  listeners: [],
-  cells: [],
-  imageUrls: {}
-};
+const listeners = [];
 
 const addListener = (id, type, handler, binding) => {
   const element = document.getElementById(id);
   element.addEventListener(type, binding ? handler.bind(binding) : handler);
-  data.listeners.push({ id, type, handler });
+  listeners.push({ id, type, handler });
 };
 
 const removeAllListeners = () => {
-  while (data.listeners.length !== 0) {
-    const { id, type, handler } = data.listeners.pop();
+  while (listeners.length !== 0) {
+    const { id, type, handler } = listeners.pop();
     document.getElementById(id).removeEventListener(type, handler);
   }
 };
@@ -34,25 +30,37 @@ const showEmpty = () => {
   empty.style.display = 'flex';
 };
 
-const handleContentImageUrls = function (urls) {
-  const imageUrls = urls || [];
+const toggleCell = async (info, selected) => {
+  const cell = document.getElementById(info.id);
+  cell.className = selected ? 'cell selected' : 'cell';
+  info.selected = selected;
+  if (selected) await removeStorageKey(info.id);
+  else await setStorageKey({ [info.id]: 'N' });
+};
+
+const handleContentResponse = async function (response = {}) {
+  const imageUrls = response.urls || [];
+  const prefix = document.getElementById('prefix');
   const gallery = document.getElementById('gallery');
   const height = document.getElementById('image-size').value;
   let processed = 0;
 
+  if (response.prefix) prefix.value = `${response.prefix}-`;
+
   for (const url of imageUrls) {
-    if (url == null || url === '' || state.urls[url] != null) continue;
+    if (url == null || url === '') continue;
 
     const cell = document.createElement('div');
     const icon = document.createElement('div');
     const img = document.createElement('img');
-    const id = generateId();
-    const info = { id, url, selected: true };
-
+    const id = md5(url);
+    const selected = await getStorageKey(id) !== 'N';
+    const info = { id, url, selected };
+ 
     icon.className = 'icon-checkmark';
 
     cell.id = id;
-    cell.className = 'cell selected';
+    cell.className = selected ? 'cell selected' : 'cell';
     cell.appendChild(img);
     cell.appendChild(icon);
 
@@ -66,12 +74,12 @@ const handleContentImageUrls = function (urls) {
           img.parentNode) {
         cell.parentNode.removeChild(cell);
       } else {
-        data.cells.push(info);
+        state.cells.push(info);
       }
 
       processed++;
 
-      if (imageUrls.length === processed && data.cells.length === 0) showEmpty();
+      if (imageUrls.length === processed && state.cells.length === 0) showEmpty();
     };
 
     gallery.appendChild(cell);
@@ -82,57 +90,41 @@ const handleContentImageUrls = function (urls) {
 };
 
 const handleButtonSelectAll = function () {
-  data.cells.forEach(info => {
-    const cell = document.getElementById(info.id);
-    cell.className = 'cell selected';
-    cell.selected = true;
-  });
+  state.cells.forEach(info => toggleCell(info, true));
 };
 
 const handleButtonDeselectAll = function () {
-  data.cells.forEach(info => {
-    const cell = document.getElementById(info.id);
-    cell.className = 'cell';
-    cell.selected = false;
-  });
+  state.cells.forEach(info => toggleCell(info, false));
 };
 
 const handleImageToggle = function () {
   const info = this;
-  const cell = document.getElementById(info.id);
-  info.selected = !info.selected;
-  cell.className = info.selected ? 'cell selected' : 'cell';
+  toggleCell(info, !info.selected);
 };
 
 const handleButtonDownloadZip = function () {
-  downloadAsZip(data.cells).then(result => {
-    if (!result) return;
-    for (const cell of data.cells) {
-      state.urls[cell.url] = cell.selected;
-    }
-    console.log('state urls update', state.urls);
-    setKey('state', state);
+  downloadAsZip(state.cells).then(async result => {
+    await clearStorageKey();
+    await setStorageKey({ 'imageSize': state.imageSize });
   });
 };
 
-const handleSelectChangeImageSize = function (e) {
+const handleSelectChangeImageSize = async function (e) {
   state.imageSize = parseInt(e.target.value);
-  setKey('state', state);
 
-  data.cells.forEach(info => {
+  state.cells.forEach(info => {
     const cell = document.getElementById(info.id);
     const img = cell.querySelector('img');
     img.width = state.imageSize / img.naturalHeight * img.naturalWidth;
     img.height = state.imageSize;
   });
+
+  await setStorageKey({ imageSize: state.imageSize });
 };
 
 window.addEventListener('DOMContentLoaded', async () => {
   // Load previous state
-  state = await getKey('state') || {};
-  state.imageSize = state.imageSize || config.IMAGE_HEIGHT_CUTOFF;
-  state.urls = state.urls || {};
-  console.log('state loaded B', typeof state, state);
+  state.imageSize = await getStorageKey('imageSize') || config.IMAGE_HEIGHT_CUTOFF;
 
   // Set default UI settings
   document.getElementById('image-size').value = state.imageSize;
@@ -148,9 +140,8 @@ window.addEventListener('DOMContentLoaded', async () => {
     active: true,
     currentWindow: true
   }, tabs => {
-    console.log('loading image urls');
     const message = { from: 'popup', subject: 'getImageURLs' };
-    chrome.tabs.sendMessage(tabs[0].id, message, handleContentImageUrls);
+    chrome.tabs.sendMessage(tabs[0].id, message, handleContentResponse);
   });
 });
 

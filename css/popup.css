@@ -12,10 +12,35 @@ body {
 nav {
   display: flex;
   align-items: center;
+  justify-content: space-between;
 
   height: 4.0rem;
-  padding: 0 1.0rem;
   background-color: #00aaff;
+}
+nav > div {
+  display: flex;
+  align-items: center;
+
+  padding: 0 1.0rem;
+}
+nav > div > * { margin-left: 0.6rem; }
+nav > div > *:first-child { margin-left: 0; }
+nav > div > button,
+nav > div > input,
+nav > div > select {
+  height: 2.2rem;
+  border: 0;
+  border-radius: 0.4rem;
+  background-color: white;
+  outline: 0;
+}
+nav > div > input { padding: 0 0.6rem; }
+nav > div > label {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: 0.05rem;
+  text-transform: uppercase;
 }
 
 #gallery {
